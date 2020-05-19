@@ -1,16 +1,23 @@
 CC = gcc
-CFLAGS = -Wall -Wexttra -fmax-errors=10
+CFLAGS = -Wall -Wextra -fmax-errors=10
 
 TARGET = server
 
-Launch: $(TARGET)
+Launch: $(TARGET) 
 	./$(TARGET) 1337 
 
-$(TARGET): linux_server.c
-	$(CC) $(CFLAGS) linux_$(TARGET).c -o $(TARGET)
+$(TARGET): server.o cmd.o
+	$(CC) $(CFLAGS) $(TARGET).o cmd.o -o $(TARGET)
+
+
+$(TARGET).o: linux_server.c cmd.h
+	$(CC) $(CFLAGS) -c linux_$(TARGET).c -o $(TARGET).o
+	
+cmd.o: cmd.c
+	$(CC) $(CFLAGS) -c cmd.c -o cmd.o
 
 client: linux_client.c
 	$(CC) $(CFLAGS) linux_client.c -o client
 
 clean:
-	rm -f $(TARGET) client
+	rm -f $(TARGET) client cmd.o server.o
