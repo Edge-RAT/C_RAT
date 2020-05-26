@@ -36,12 +36,18 @@ char* execute(char* cmd[50]){
 
 void sendOutput(struct output *start, int socket) {
     struct output * ptr = start;
+    char message[4096];
+    memset(message, 0, 4096);
     while (ptr!=NULL) {
         printf("%s", ptr->line);
-	send(socket, ptr->line, ptr->length, 0);
-//      printf(" pointer: %p : ", ptr->next);
+	strcat(message, ptr->line);
+//	send(socket, ptr->line, ptr->length+1, 0);
+      printf(" pointer: %p : ", ptr->next);
         ptr = ptr->next;
     }
+	send(socket, message, sizeof(message), 0);
+    printf("returning to function");
+    return 0;
 }
 
 
@@ -64,19 +70,23 @@ int main(int argc, char* argv[]){
 	int j = 0;
 	char message[256] = "The client sent: ";
 	char response[BUFSIZE];
-	char end[1];
-	end[0] = '\0';
 	int orig_len = strlen(message);
 	printf("\n%d\n",orig_len);
-	while(1){
-		int client_socket = accept(server_sock, NULL, NULL);
+	int client_socket;
+	while(client_socket = accept(server_sock, NULL, NULL)){
 		send(client_socket, "Connected", sizeof("connected"), 0);
+//		recv(client_socket, &response, sizeof(response), 0);
 		while(1){
+			memset(response, 0, sizeof(response));
+				printf("\nfinished");
 			recv(client_socket, &response, sizeof(response), 0);
+			printf("This is what was received: %s;", response);
 			if(response[0]=='l'){
+				printf("\nfinished");
+				printf("\nfinished");
 				start = call(response);
 				sendOutput(start, client_socket);
-				send(client_socket, end, 2048, 0);
+				printf("\nfinished");
 				freeList(start);
 //				send(client_socket, execute(response), 2048, 0);
 			}
@@ -94,9 +104,11 @@ int main(int argc, char* argv[]){
 					message[22] = response[0];
 				}
 				j = 0;
-				send(client_socket, message, sizeof(message), 0);
+				send(client_socket, message, strlen(message), 0);
 				message[orig_len] ='\0';
 			}
+			printf("\nfinished");
+			printf("\nfinished");
 			if(!(strncmp("exit", response, 4))){
 				printf("exiting");
 			}

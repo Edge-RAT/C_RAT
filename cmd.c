@@ -64,7 +64,10 @@ struct digit* call(char *cmd){
 	int buffer = 0;
 	int length = 0;
 	struct digit *start, *newOutptr, *end, *tmp;
-
+	/*printf("cmd received: ");
+	fputs(cmd, stdout);
+	sleep(10);
+	printf(";");*/
 	if ((fp = popen(cmd, "r")) == NULL) {
 		printf("Error opening pipe!\n");
 		return -1;

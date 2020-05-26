@@ -6,9 +6,11 @@ TARGET = server
 Launch: $(TARGET) 
 	./$(TARGET) 1337 
 
-$(TARGET): server.o cmd.o
+$(TARGET): server.o cmd.o client
 	$(CC) $(CFLAGS) $(TARGET).o cmd.o -o $(TARGET)
 
+client: linux_client.c
+	$(CC) $(CFLAGS) -c linux_client.c -o client
 
 $(TARGET).o: linux_server.c cmd.h
 	$(CC) $(CFLAGS) -c linux_$(TARGET).c -o $(TARGET).o

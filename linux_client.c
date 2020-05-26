@@ -1,47 +1,76 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netdb.h>
+#include <string.h>
 
-int main(int argc, char *argv[]){
-	
-	//establish client socket
-	int client_socket = socket(AF_INET, SOCK_STREAM, 0);
-	
-	//setup address structure
-	struct sockaddr_in connect_address;
-	connect_address.sin_family = AF_INET;
-	connect_address.sin_port = htons(atoi(argv[2]));
-	inet_aton(argv[1], (struct in_addr*) &connect_address.sin_addr.s_addr);
-
-	//Connect to server
-	connect(client_socket, (struct sockaddr*) &connect_address, sizeof(connect_address));
-	char response[256];
-	char message[256];
-	recv(client_socket, &response, sizeof(response), 0);
-	printf("%s\n", response);
-	while(1){
-		fgets(message, 30, stdin);
-		printf("You entered: %s\n\n", message);
-		send(client_socket, message, sizeof(message), 0);
-		while(response[0]!='\0'){
-			recv(client_socket, &response, sizeof(response), 0);
-//			printf("The server responded with:\n\t\t %s\n", response);
-			printf("%s",response);
-			printf("huh");
-		}
-		if((strncmp("exit", message, 4)) == 0){
-                        printf("exiting");
-			break;
-                }
-		response[0]='a';
+int main(int argc, char* argv[]){
+	if(argc < 3){
+		printf("Usage: client <IP> <port>\n");
+		return 1;
 	}
-	close(client_socket);
+
+	struct addrinfo initaddr;
+	memset(&initaddr, 0, sizeof(initaddr));
+	initaddr.ai_socktype = SOCK_STREAM;
+	struct addrinfo *claddr;
+	if (getaddrinfo(argv[1], argv[2], &initaddr, &claddr)){
+		printf("Initializing socket failed");
+		return 1;
+	}
+	int clSoc;
+	clSoc = socket(claddr->ai_family, claddr->ai_socktype, claddr->ai_protocol);
+	printf("connecting to: %s:%s\n", argv[1], argv[2]);
+	if (connect(clSoc, claddr->ai_addr, claddr->ai_addrlen)){
+		printf("Connect failed\n");
+		return 1;
+	}
+	printf("Connected\n");
+	freeaddrinfo(claddr);
+	while(1){
+		fd_set reads;
+		FD_ZERO(&reads);
+		FD_SET(clSoc, &reads);
+		FD_SET(0, &reads);
+		struct timeval timeout;
+		timeout.tv_sec = 1;
+		timeout.tv_usec = 0;
+		if (select(clSoc+1, &reads, 0, 0, &timeout) <0){
+			printf("select failed");
+			return 1;
+		}
+		if (FD_ISSET(clSoc, &reads)){
+			char read[4096];
+			int bytes_received = recv(clSoc, read, 4096, 0);
+			if (bytes_received < 1){
+				printf("Connection closed by peer.\n");
+				break;
+			}
+			printf("Received (%d bytes):\n %.*s\n", bytes_received, bytes_received, read);
+		}
+		if (FD_ISSET(clSoc, &reads)){
+			char read[4096];
+			if (!fgets(read, 4096, stdin))
+				break;
+			if(strncmp(read, "exit", 4)==0){
+				printf("Exiting connection.\n");
+				break;
+			}
+			printf("Sending: %s\n", read);
+			int bytes_sent = send(clSoc, read, strlen(read), 0);
+			printf("Sent %d bytes.\n", bytes_sent);
+		}
+	}
+	printf("Closing socket.\n");
+	close(clSoc);
+	printf("Finished\n");
 	return 0;
 
+
+
+
+
 }
-
-
