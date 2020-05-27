@@ -7,114 +7,76 @@
 
 #include <netinet/in.h>
 #include "cmd.h"
+#include "srvsocket.h"
 
 #define BUFSIZE 2048
-
-char* execute(char* cmd[50]){
-	char buf[BUFSIZE];
-	FILE *fp;
-
-	if ((fp = popen(cmd, "r")) == NULL) {
-		printf("Error opening pipe!\n");
-		return -1;
-	}
-
-	while (fgets(buf, BUFSIZE, fp) != NULL) {
-	// Do whatever you want here...
-		printf("%s", buf);
-		printf("the end?");
-	}
-
-	printf("\n\nend\n\n");
-/*	if(pclose(fp))  {
-		printf("Command not found or exited with error status\n");
-		return -1;
-	}*/
-
-	return buf;
-}
-
-void sendOutput(struct output *start, int socket) {
-    struct output * ptr = start;
-    char message[4096];
-    memset(message, 0, 4096);
-    while (ptr!=NULL) {
-        printf("%s", ptr->line);
-	strcat(message, ptr->line);
-//	send(socket, ptr->line, ptr->length+1, 0);
-      printf(" pointer: %p : ", ptr->next);
-        ptr = ptr->next;
-    }
-	send(socket, message, sizeof(message), 0);
-    printf("returning to function");
-    return 0;
-}
-
 
 int main(int argc, char* argv[]){
 
 	//Establish socket
 	struct output * start;
-	int server_sock = socket(AF_INET, SOCK_STREAM, 0);
-	struct sockaddr_in server_address;
-	server_address.sin_family = AF_INET;
+	int port = atoi(argv[1]);
+	if(argc < 2 || port < 0 || port > 65535){
+                printf("Usage: server <port>\n");
+                return 1;
+        }
 
-	// Port passed through cmd execution
-	printf("Server listening on port %d.\n", atoi(argv[1]));
-	server_address.sin_port = htons(atoi(argv[1]));
-	server_address.sin_addr.s_addr = INADDR_ANY;
 
-	bind(server_sock, (struct sockaddr*) &server_address, sizeof(server_address));
-	listen(server_sock, 5);
-	int i = 0;
-	int j = 0;
-	char message[256] = "The client sent: ";
+	int server_sock = 0;
+	
+	//Initialize server socket - function in socket.c
+	server_sock = initialize_server(port);
+	printf("Server listening on port %d.\n", port);
+
 	char response[BUFSIZE];
-	int orig_len = strlen(message);
-	printf("\n%d\n",orig_len);
 	int client_socket;
-	while(client_socket = accept(server_sock, NULL, NULL)){
+	int max_fd;
+	int i;
+	i = 0;
+	max_fd = server_sock;
+	fd_set master;
+	FD_ZERO(&master);
+	FD_SET(server_sock, &master);
+	while(1){
+		fd_set reads;
+		FD_ZERO(&reads);
+		reads = master;
+		select(max_fd+1, &reads, 0, 0, 0);
+		if(FD_ISSET(server_sock, &reads)){
+			client_socket = accept(server_sock, NULL, NULL);
+			send(client_socket, "Connected", sizeof("connected"), 0);
+			FD_SET(client_socket, &master);
+			if(client_socket > max_fd)
+				max_fd = client_socket;
+		}
+		else{
+			for(i = 1; i <= max_fd; i++){
+				if(FD_ISSET(i, &reads)){
+					int size = 0;
+					memset(response, 0, sizeof(response));
+					recv(i, &response, sizeof(response), 0);
+					printf("This is what was received: %s;", response);
+					//Determines what to do with the command - function in cmd.c
+					handleResponse(response, i);
+				}
+			}
+		}
+	}
+
+
+/*	while(client_socket = accept(server_sock, NULL, NULL)){
 		send(client_socket, "Connected", sizeof("connected"), 0);
-//		recv(client_socket, &response, sizeof(response), 0);
 		while(1){
+			int size = 0;
 			memset(response, 0, sizeof(response));
-				printf("\nfinished");
 			recv(client_socket, &response, sizeof(response), 0);
 			printf("This is what was received: %s;", response);
-			if(response[0]=='l'){
-				printf("\nfinished");
-				printf("\nfinished");
-				start = call(response);
-				sendOutput(start, client_socket);
-				printf("\nfinished");
-				freeList(start);
-//				send(client_socket, execute(response), 2048, 0);
-			}
-			else {
-				//Copying string 2 to the end of string 1
-				for(i=orig_len;response[j]!='\0';i++) 
-				  {
-				     message[i]=response[j];
-				     j++;
-				  }
-				message[i]='\0';
-				if(response[0]=="p"){
-					message[20] = response[0];
-					message[21] = response[0];
-					message[22] = response[0];
-				}
-				j = 0;
-				send(client_socket, message, strlen(message), 0);
-				message[orig_len] ='\0';
-			}
-			printf("\nfinished");
-			printf("\nfinished");
-			if(!(strncmp("exit", response, 4))){
-				printf("exiting");
-			}
+			//Determines what to do with the command - function in cmd.c
+			handleResponse(response, client_socket);
 		}
 		close(client_socket);
 
 	}
+	*/
 	return 0;
 }

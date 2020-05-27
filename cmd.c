@@ -57,25 +57,26 @@ void freeList(struct output *start) {
     }
 }
 
-struct digit* call(char *cmd){
+struct output* call(char *cmd, int * size){
 	char buf[BUFSIZE];
-	char ** array;
 	FILE *fp;
 	int buffer = 0;
 	int length = 0;
-	struct digit *start, *newOutptr, *end, *tmp;
+	struct output *start, *newOutptr, *end;
 	/*printf("cmd received: ");
 	fputs(cmd, stdout);
 	sleep(10);
 	printf(";");*/
 	if ((fp = popen(cmd, "r")) == NULL) {
 		printf("Error opening pipe!\n");
-		return -1;
+		start = NULL;
 	}
 
 	while (fgets(buf, BUFSIZE, fp) != NULL) {
+
+		//buffer = length of output
 		for(buffer = 0; buf[buffer] !='\0'; buffer++){
-			buffer++;
+//			buffer++;
 		}
 		if(length == 0){
 			start = createOutput(buffer, buf);
@@ -93,25 +94,64 @@ struct digit* call(char *cmd){
 //		printOutput(start);
 
 		length++;
+		*size = *size + buffer;
 	}
 
 	if(pclose(fp))  {
 		printf("Command not found or exited with error status\n");
-		return -1;
+		start = NULL;
 	}
 	return start;
 }
 
-/*
-int main(void){
-	char cmd[50];
-	struct digit* start;
-	while(strncmp("exit", cmd, 4)!=0){
-		printf("\n\ncmd: %s\n");	
-		fgets(cmd, 50, stdin);
-		start = call(cmd);
-		printOutput(start);
-		freeList(start);
-		printf("next? \n");
-	}	
-}*/
+
+void handleResponse(char * response, int socket){
+        char * ptr = response;
+        int size;
+        size = 0;
+        struct output * start;
+        char message[256] = "The client sent: ";
+        int orig_len = strlen(message);
+        int i, j;
+        i = 0;
+        j = 0;
+        if(response[0]=='!'){
+                start = call(ptr+1, &size);
+                if (start == NULL)
+                        printf("error");
+                else{
+                        printf("%d",size);
+                        sendOutput(start, socket, &size);
+                        freeList(start);
+                }
+        }
+        else {
+                //Copying string 2 to the end of string 1
+                for(i=orig_len;response[j]!='\0';i++)
+                  {
+                     message[i]=response[j];
+                     j++;
+                  }
+                message[i]='\0';
+                j = 0;
+                send(socket, message, strlen(message), 0); 
+                message[orig_len] ='\0';
+        }
+        if(!(strncmp("exit", response, 4))){
+                printf("exiting");
+        }
+
+}
+void sendOutput(struct output *start, int socket, int * size) {
+    struct output * ptr = start;
+    char message[*size];
+    memset(message, 0, sizeof(message));
+    while (ptr!=NULL) {
+        printf("%s", ptr->line);
+        strcat(message, ptr->line);
+        printf(" pointer: %p : ", ptr->next);
+        ptr = ptr->next;
+    }   
+    send(socket, message, sizeof(message), 0); 
+    printf("returning to function");
+}
