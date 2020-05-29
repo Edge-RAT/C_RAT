@@ -6,6 +6,13 @@
 #include <sys/socket.h>
 
 #include <netinet/in.h>
+
+#include <openssl/crypto.h>
+#include <openssl/x509.h>
+#include <openssl/pem.h>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
+
 #include "cmd.h"
 #include "srvsocket.h"
 
@@ -20,8 +27,7 @@ int main(int argc, char* argv[]){
                 printf("Usage: server <port>\n");
                 return 1;
         }
-
-
+	
 	int server_sock = 0;
 	
 	//Initialize server socket - function in socket.c
@@ -33,6 +39,29 @@ int main(int argc, char* argv[]){
 	int max_fd;
 	int i;
 	i = 0;
+
+	//OpenSSL
+	SSL_library_init();
+	OpenSSL_add_all_algorithms();
+	SSL_load_error_strings();
+
+	SSL_CTX *ctx = SSL_CTX_new(TLS_server_method());
+	if(!ctx){
+		fprintf(stderr, "SSL_CTX_new() failed. \n");
+		return 1;
+	}
+
+	if (!SSL_CTX_use_certificate_file(ctx, "cert.pem" , SSL_FILETYPE_PEM)|| !SSL_CTX_use_PrivateKey_file(ctx, "key.pem", SSL_FILETYPE_PEM)) {    
+		fprintf(stderr, "SSL_CTX_use_certificate_file() failed.\n");    
+		ERR_print_errors_fp(stderr);    
+		return 1;
+	}
+
+
+
+
+	SSL * client_SSL[10];
+	SSL * ssl;
 	max_fd = server_sock;
 	fd_set master;
 	FD_ZERO(&master);
@@ -44,7 +73,21 @@ int main(int argc, char* argv[]){
 		select(max_fd+1, &reads, 0, 0, 0);
 		if(FD_ISSET(server_sock, &reads)){
 			client_socket = accept(server_sock, NULL, NULL);
-			send(client_socket, "Connected", sizeof("connected"), 0);
+			ssl = SSL_new(ctx);
+			if (!ctx){
+				fprintf(stderr, "SSL_new() failed.\n");
+				return 1;
+			}
+			SSL_set_fd(ssl, client_socket);
+			if (SSL_accept(ssl) <= 0) {
+				fprintf(stderr, "SSL_accept() failed.\n");
+				ERR_print_errors_fp(stderr);
+				return 1;
+			}
+			client_SSL[client_socket]=ssl;
+			printf("SSL connection using %s\n", SSL_get_cipher(ssl));
+//			SSL_write(client_socket, "Connected", sizeof("connected"));
+			SSL_write(ssl, "Connected", sizeof("connected"));
 			FD_SET(client_socket, &master);
 			if(client_socket > max_fd)
 				max_fd = client_socket;
@@ -54,29 +97,22 @@ int main(int argc, char* argv[]){
 				if(FD_ISSET(i, &reads)){
 					int size = 0;
 					memset(response, 0, sizeof(response));
-					recv(i, &response, sizeof(response), 0);
+					ssl = client_SSL[i];
+					SSL_read(ssl, &response, sizeof(response));
 					printf("This is what was received: %s;", response);
 					//Determines what to do with the command - function in cmd.c
-					handleResponse(response, i);
+//					handleResponse(response, i);
+					handleResponse(response, ssl);
 				}
 			}
 		}
 	}
+	//Client Connection
+	SSL_shutdown(ssl);
+	close(server_sock);
+	SSL_free(ssl);
 
-
-/*	while(client_socket = accept(server_sock, NULL, NULL)){
-		send(client_socket, "Connected", sizeof("connected"), 0);
-		while(1){
-			int size = 0;
-			memset(response, 0, sizeof(response));
-			recv(client_socket, &response, sizeof(response), 0);
-			printf("This is what was received: %s;", response);
-			//Determines what to do with the command - function in cmd.c
-			handleResponse(response, client_socket);
-		}
-		close(client_socket);
-
-	}
-	*/
+	//Server Connection
+	SSL_CTX_free(ctx);
 	return 0;
 }

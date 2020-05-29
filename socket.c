@@ -10,7 +10,7 @@ int initialize_server(int port) {
 	soc.sin_port = htons(port);
 	soc.sin_addr.s_addr = INADDR_ANY;
 	bind(srvSocket, (struct sockaddr *)&soc, sizeof(soc));
-	listen(srvSocket, 5);
+	listen(srvSocket, 10);
 	return srvSocket;
 }
 
