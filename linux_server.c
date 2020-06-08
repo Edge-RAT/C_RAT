@@ -20,9 +20,10 @@
 
 int main(int argc, char* argv[]){
 
-	//Establish socket
 	struct output * start;
 	int port = atoi(argv[1]);
+
+	//handle arguments
 	if(argc < 2 || port < 0 || port > 65535){
                 printf("Usage: server <port>\n");
                 return 1;
@@ -57,10 +58,8 @@ int main(int argc, char* argv[]){
 		return 1;
 	}
 
-
-
-
-	SSL * client_SSL[10];
+	//Array for clinet socket
+	SSL * client_SSL[15];
 	SSL * ssl;
 	max_fd = server_sock;
 	fd_set master;
@@ -86,7 +85,6 @@ int main(int argc, char* argv[]){
 			}
 			client_SSL[client_socket]=ssl;
 			printf("SSL connection using %s\n", SSL_get_cipher(ssl));
-//			SSL_write(client_socket, "Connected", sizeof("connected"));
 			SSL_write(ssl, "Connected", sizeof("connected"));
 			FD_SET(client_socket, &master);
 			if(client_socket > max_fd)
@@ -98,10 +96,12 @@ int main(int argc, char* argv[]){
 					int size = 0;
 					memset(response, 0, sizeof(response));
 					ssl = client_SSL[i];
-					SSL_read(ssl, &response, sizeof(response));
+					if(SSL_read(ssl, &response, sizeof(response))<=0){
+						printf("Connection closed\n");
+						FD_CLR(i, &master);
+					}
 					printf("This is what was received: %s;", response);
 					//Determines what to do with the command - function in cmd.c
-//					handleResponse(response, i);
 					handleResponse(response, ssl);
 				}
 			}

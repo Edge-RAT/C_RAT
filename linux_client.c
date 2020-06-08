@@ -13,6 +13,8 @@
 #include <openssl/ssl.h>
 #include <openssl/err.h>
 
+int commands(SSL * socket, char * ptr);
+char * receive(SSL * socket, FILE *fp); 
 
 int main(int argc, char* argv[]){
 
@@ -90,14 +92,8 @@ int main(int argc, char* argv[]){
 
 		//Get information if it is waiting in RECV-Q
 		if (FD_ISSET(clSoc, &reads)){
-			char read[4096];
-			int bytes_received = SSL_read(ssl, read, 4096);
-			if (bytes_received < 1){
-				printf("Connection closed by peer.\n");
-				break;
-			}
-			printf("Received (%d bytes):\n %.*s\n", bytes_received, bytes_received, read);
-			printf("Enter ! followed by Command: (\"Exit\" to quit)\n");
+			receive(ssl, stdout);
+//			printf("Enter ! followed by Command: (\"Exit\" to quit)\n");
 		}
 
 		//Get information entered by the user
@@ -110,12 +106,15 @@ int main(int argc, char* argv[]){
 			//exit condition
 			if(strncmp(ptr+1, "xit\n", 4)==0){
 				printf("Exiting connection.\n");
-				break;
+				return 1;
 			}
 			printf("Sending: %s\n", read);
 			int bytes_sent = SSL_write(ssl, read, strlen(read));
 			printf("Sent %d bytes.\n", bytes_sent);
-			printf("Enter ! followed by Command: (\"Exit\" to quit)\n");
+			if(commands(ssl, ptr)){
+				break;
+			}
+//			printf("Enter ! followed by Command: (\"Exit\" to quit)\n");
 		}
 	}
 	printf("Closing socket.\n");
@@ -127,4 +126,47 @@ int main(int argc, char* argv[]){
 
 
 
+}
+
+
+int commands(SSL* socket, char * ptr){
+	if(strncmp(ptr, "dl", 2)==0){
+		FILE * outfile;
+		char * words = strtok(ptr, " ");
+		for (int i = 0; i <= 2; i++){
+			words = strtok(NULL, " ");
+			if (i == 1){
+				words = strtok(words, "\n");
+			       	outfile = fopen(words, "wb");
+				printf("downloading file to %s.\n", words);
+			}
+		}
+		receive(socket, outfile);
+	}
+	return 0;
+}
+
+
+char * receive(SSL * socket, FILE * fp){
+	char read[4096];
+	memset(read, 0, sizeof(read));
+	int bytes_received = SSL_read(socket, read, 4096);
+	int total = bytes_received;
+	int i =0;
+	if (bytes_received < 1){
+		printf("Connection closed by peer.\n");
+		exit(1);
+		return NULL;
+	}
+	fwrite(read, bytes_received, 1, fp);
+	while (bytes_received == 4096){
+		bytes_received = SSL_read(socket, read, 4096);
+		total += bytes_received;
+//		printf("writing %d to file\n", bytes_received);
+		fwrite(read, bytes_received, 1, fp);
+	}
+	if (fp!=stdout) fclose(fp);
+	printf("\nReceived (%d bytes):\n", total);
+	printf("Enter ! followed by Command: (\"Exit\" to quit)\n");
+	return read;
 }
